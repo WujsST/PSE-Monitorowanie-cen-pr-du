@@ -1,0 +1,5 @@
+{
+  "name": "PSE Energy Monitor",
+  "description": "A production-ready dashboard for monitoring Polish energy prices (PSE) with real-time updates and analytics.",
+  "requestFramePermissions": []
+}

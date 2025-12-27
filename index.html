@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Cen Energii PSE</title>
+    <meta name="description" content="Real-time dashboard cen energii elektrycznej z PSE">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        // Design System Colors
+                        bg: {
+                            primary: '#E8E9F3',
+                            secondary: '#DFE1F0',
+                            card: '#FFFFFF',
+                        },
+                        dark: {
+                            bg: '#0F172A',
+                            card: '#1E293B',
+                            cardSecondary: '#334155'
+                        },
+                        text: {
+                            primary: '#1E293B',
+                            secondary: '#64748B',
+                            muted: '#94A3B8'
+                        },
+                        accent: {
+                            blue: '#6366F1',
+                            indigo: '#4F46E5',
+                            orange: '#F97316',
+                            green: '#10B981',
+                            red: '#EF4444',
+                            purple: '#8B5CF6'
+                        }
+                    },
+                    boxShadow: {
+                        'card': '0 4px 20px rgba(0, 0, 0, 0.06)',
+                        'card-hover': '0 8px 30px rgba(0, 0, 0, 0.12)',
+                        'float': '0 10px 40px rgba(0, 0, 0, 0.15)',
+                    },
+                    borderRadius: {
+                        'xl': '16px',
+                        '2xl': '20px',
+                        '3xl': '24px',
+                    },
+                    animation: {
+                        'slideDown': 'slideDown 0.5s ease-out',
+                    },
+                    keyframes: {
+                        slideDown: {
+                            '0%': { transform: 'translateY(-100%)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        body {
+            /* Lavender Gray Gradient */
+            background: linear-gradient(135deg, #E8E9F3 0%, #DFE1F0 100%);
+        }
+        
+        .dark body {
+            background: linear-gradient(135deg, #0F172A 0%, #020617 100%);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* Custom Tooltip */
+        .tooltip {
+            visibility: hidden;
+            position: absolute;
+            z-index: 50;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            padding: 12px;
+            background-color: #1E293B;
+            color: white;
+            text-align: center;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            margin-bottom: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            font-weight: 500;
+        }
+        .tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1E293B transparent transparent transparent;
+        }
+        .has-tooltip:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Table Styles */
+        .modern-table {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .modern-table th {
+            border-bottom: 1px solid #E2E8F0;
+        }
+        .dark .modern-table th {
+            border-bottom: 1px solid #334155;
+        }
+        .modern-table td {
+            border-bottom: 1px solid #F1F5F9;
+        }
+        .dark .modern-table td {
+            border-bottom: 1px solid #334155;
+        }
+        .modern-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Highlight Animation */
+        @keyframes highlight {
+            0% { background-color: rgba(99, 102, 241, 0.1); }
+            100% { background-color: transparent; }
+        }
+        .animate-highlight {
+            animation: highlight 2s ease-out;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen text-text-primary dark:text-gray-100 transition-colors duration-300 selection:bg-accent-blue selection:text-white"
+      x-data="dashboard()"
+      x-init="init()"
+      :class="{ 'dark': darkMode }">
+
+    <div class="max-w-[1400px] mx-auto px-6 pb-12">
+
+        <!-- HEADER -->
+        <header class="sticky top-6 z-40 bg-white/90 dark:bg-dark-card/90 backdrop-blur-md shadow-card rounded-2xl mb-8 mt-6 transition-colors duration-300">
+            <div class="px-8 py-5">
+                <div class="flex flex-col lg:flex-row items-center justify-between gap-4 lg:gap-0">
+                    <!-- Logo & Title -->
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-accent-blue flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold tracking-tight text-text-primary dark:text-white">
+                                Monitor Energii
+                            </h1>
+                            <p class="text-xs font-medium text-text-secondary dark:text-text-muted uppercase tracking-wider">Polska Sieć Elektroenergetyczna</p>
+                        </div>
+                    </div>
+
+                    <!-- Center: Clock & Status -->
+                    <div class="flex items-center gap-6">
+                        <div class="hidden md:flex flex-col items-center">
+                            <span class="text-2xl font-bold font-mono text-text-primary dark:text-white" x-text="currentTime"></span>
+                            <span class="text-xs text-text-muted font-medium" x-text="new Date().toLocaleDateString('pl-PL')"></span>
+                        </div>
+                        
+                        <div class="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden md:block"></div>
+
+                        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-accent-green/10 text-accent-green border border-accent-green/20">
+                            <span class="relative flex h-2.5 w-2.5">
+                                <span x-show="connectionStatus === 'connected'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75"></span>
+                                <span :class="connectionStatus === 'connected' ? 'bg-accent-green' : 'bg-accent-red'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+                            </span>
+                            <span class="text-xs font-semibold uppercase tracking-wide">Live</span>
+                        </div>
+                    </div>
+
+                    <!-- Right: Actions -->
+                    <div class="flex items-center gap-3">
+                        <!-- Date Range Filter -->
+                        <div class="relative group hidden sm:block">
+                            <select class="appearance-none bg-gray-50 dark:bg-dark-cardSecondary border border-gray-200 dark:border-gray-700 text-text-primary dark:text-gray-200 text-sm font-medium rounded-xl focus:ring-2 focus:ring-accent-blue focus:border-transparent block py-2.5 pl-4 pr-10 transition-all cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600">
+                                <option value="24h">Ostatnie 24h</option>
+                                <option value="7d">Ostatnie 7 dni</option>
+                                <option value="30d">Ostatnie 30 dni</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-text-secondary">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+
+                        <!-- Refresh Button -->
+                        <button @click="refreshData(true)" 
+                                :disabled="isLoading"
+                                class="p-2.5 text-text-secondary hover:text-accent-blue dark:text-text-muted dark:hover:text-white transition-all rounded-xl hover:bg-gray-50 dark:hover:bg-dark-cardSecondary border border-transparent hover:border-gray-200 dark:hover:border-gray-700 relative group">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5" :class="{'animate-spin': isLoading}">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                            <span class="tooltip">Odśwież dane</span>
+                        </button>
+
+                        <!-- Export CSV -->
+                        <button @click="exportCSV" class="p-2.5 text-text-secondary hover:text-accent-green dark:text-text-muted dark:hover:text-accent-green transition-all rounded-xl hover:bg-gray-50 dark:hover:bg-dark-cardSecondary border border-transparent hover:border-gray-200 dark:hover:border-gray-700 group relative">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            <span class="tooltip">Eksportuj CSV</span>
+                        </button>
+
+                        <!-- Dark Mode Toggle -->
+                        <button @click="toggleDarkMode" class="w-[52px] h-[28px] bg-gray-200 dark:bg-dark-cardSecondary rounded-full relative cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-accent-blue focus:ring-offset-2 dark:focus:ring-offset-dark-bg" aria-label="Toggle Dark Mode">
+                            <div class="w-[24px] h-[24px] bg-white rounded-full absolute top-[2px] left-[2px] transition-transform duration-300 shadow-sm flex items-center justify-center text-accent-orange dark:text-accent-purple"
+                                 :class="{ 'translate-x-[24px]': darkMode }">
+                                 <svg x-show="!darkMode" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5">
+                                    <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
+                                  </svg>
+                                  <svg x-show="darkMode" x-cloak xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5">
+                                    <path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.7-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clip-rule="evenodd" />
+                                  </svg>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ALERT BANNER -->
+        <div x-show="activeAlert" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-4" class="sticky top-28 z-30 w-full mb-8" x-cloak>
+            <div :class="activeAlert?.type === 'danger' ? 'border-l-accent-red bg-red-50 dark:bg-red-900/10' : 'border-l-accent-green bg-green-50 dark:bg-green-900/10'" class="border-l-4 rounded-xl shadow-card px-6 py-4 bg-white dark:bg-dark-card">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="p-2 rounded-lg" :class="activeAlert?.type === 'danger' ? 'bg-red-100 text-accent-red dark:bg-red-900/30' : 'bg-green-100 text-accent-green dark:bg-green-900/30'">
+                            <span class="text-xl" x-text="activeAlert?.type === 'danger' ? '🚨' : '✅'"></span>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-text-primary dark:text-white text-sm" x-text="activeAlert?.type === 'danger' ? 'Ostrzeżenie' : 'Informacja'"></h3>
+                            <p class="text-text-secondary dark:text-gray-300 text-sm mt-0.5" x-text="activeAlert?.message"></p>
+                        </div>
+                    </div>
+                    <button @click="activeAlert = null" class="text-text-muted hover:text-text-primary transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN METRICS GRID -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-8">
+            
+            <!-- CARD 1: CEN (Main) -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 hover:-translate-y-1 relative group overflow-hidden">
+                <!-- Status Bar Indicator -->
+                <div class="absolute top-0 left-0 w-full h-1.5" 
+                     :class="{
+                        'bg-accent-green': currentData.cen_cost < 300,
+                        'bg-accent-orange': currentData.cen_cost >= 300 && currentData.cen_cost <= 500,
+                        'bg-yellow-400': currentData.cen_cost > 500 && currentData.cen_cost <= 700,
+                        'bg-accent-red': currentData.cen_cost > 700
+                     }"></div>
+                
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-semibold text-text-secondary dark:text-text-muted tracking-wide">Cena Niezbilansowania</h3>
+                        <div class="has-tooltip cursor-help">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-text-muted hover:text-accent-blue transition-colors">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                            </svg>
+                            <span class="tooltip">Cena energii niezbilansowania (CEN) - kluczowy wskaźnik kosztu odchyleń.</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center px-3 py-1 rounded-xl text-xs font-bold gap-1"
+                         :class="currentData.cen_change >= 0 ? 'bg-red-50 text-accent-red dark:bg-red-900/20' : 'bg-green-50 text-accent-green dark:bg-green-900/20'">
+                        <span x-text="currentData.cen_change >= 0 ? '↗' : '↘'"></span>
+                        <span x-text="Math.abs(currentData.cen_change).toFixed(1) + '%'"></span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[48px] font-bold text-text-primary dark:text-white leading-none" x-text="formatCurrency(currentData.cen_cost)"></span>
+                    </div>
+                    <span class="text-sm font-medium text-text-muted mt-2">zł/MWh</span>
+                </div>
+
+                <!-- Sparkline -->
+                <div class="mt-6 h-12 w-full opacity-60 group-hover:opacity-100 transition-opacity">
+                    <svg viewBox="0 0 100 20" preserveAspectRatio="none" class="w-full h-full" :class="{
+                        'text-accent-green fill-accent-green': currentData.cen_cost < 300,
+                        'text-accent-orange fill-accent-orange': currentData.cen_cost >= 300 && currentData.cen_cost <= 500,
+                        'text-yellow-400 fill-yellow-400': currentData.cen_cost > 500 && currentData.cen_cost <= 700,
+                        'text-accent-red fill-accent-red': currentData.cen_cost > 700
+                    }">
+                            <path :d="generateSparklinePath(historyData, 'cen_cost')" stroke="currentColor" stroke-width="2.5" fill="none" vector-effect="non-scaling-stroke"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- CARD 2: CSDAC -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 hover:-translate-y-1 relative group">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-semibold text-text-secondary dark:text-text-muted tracking-wide">Giełda (CSDAC)</h3>
+                        <div class="has-tooltip cursor-help">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-text-muted hover:text-accent-blue transition-colors">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                            </svg>
+                            <span class="tooltip">Cena z Rynku Dnia Następnego.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[48px] font-bold text-text-primary dark:text-white leading-none" x-text="formatCurrency(currentData.csdac_pln)"></span>
+                    </div>
+                    <span class="text-sm font-medium text-text-muted mt-2">zł/MWh</span>
+                </div>
+                
+                <div class="mt-8 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div class="bg-accent-blue h-2 rounded-full transition-all duration-1000" :style="`width: ${(currentData.csdac_pln / 1000) * 100}%`"></div>
+                </div>
+            </div>
+
+            <!-- CARD 3: COR -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 hover:-translate-y-1 relative group">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-semibold text-text-secondary dark:text-text-muted tracking-wide">Rezerwa (COR)</h3>
+                        <div class="has-tooltip cursor-help">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-text-muted hover:text-accent-blue transition-colors">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                            </svg>
+                            <span class="tooltip">Koszt utrzymania rezerw operacyjnych.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[48px] font-bold text-text-primary dark:text-white leading-none" x-text="formatCurrency(currentData.cor_cost)"></span>
+                    </div>
+                    <span class="text-sm font-medium text-text-muted mt-2">zł/MWh</span>
+                </div>
+                
+                <div class="mt-8 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div class="bg-accent-purple h-2 rounded-full transition-all duration-1000" :style="`width: ${(currentData.cor_cost / 1000) * 100}%`"></div>
+                </div>
+            </div>
+
+            <!-- CARD 4: CEBpp -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 hover:-translate-y-1 relative group">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-semibold text-text-secondary dark:text-text-muted tracking-wide">Bilansująca (CEBpp)</h3>
+                        <div class="has-tooltip cursor-help">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-text-muted hover:text-accent-blue transition-colors">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                            </svg>
+                            <span class="tooltip">Cena Energii Bilansującej w Polu Pracy.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[48px] font-bold text-text-primary dark:text-white leading-none" x-text="formatCurrency(currentData.ceb_pp_cost)"></span>
+                    </div>
+                    <span class="text-sm font-medium text-text-muted mt-2">zł/MWh</span>
+                </div>
+                
+                <div class="mt-8 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div class="bg-accent-green h-2 rounded-full transition-all duration-1000" :style="`width: ${(currentData.ceb_pp_cost / 1000) * 100}%`"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHARTS SECTION -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <!-- Main Line Chart -->
+            <div class="lg:col-span-2 bg-bg-card dark:bg-dark-card rounded-3xl shadow-card p-8">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 class="text-xl font-bold text-text-primary dark:text-white">Trend cenowy</h2>
+                        <p class="text-sm text-text-muted mt-1">Ostatnie 24 godziny</p>
+                    </div>
+                    <button @click="exportChart('mainChart')" class="px-4 py-2 text-xs font-semibold text-accent-blue bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                        Zapisz PNG
+                    </button>
+                </div>
+                <div class="relative h-[350px] w-full">
+                    <canvas id="mainChart" x-ref="mainChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Hourly Averages Bar Chart -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl shadow-card p-8">
+                <div class="mb-8">
+                    <h2 class="text-xl font-bold text-text-primary dark:text-white">Profil godzinowy</h2>
+                    <p class="text-sm text-text-muted mt-1">Średnia z 7 dni</p>
+                </div>
+                <div class="relative h-[350px] w-full">
+                    <canvas id="barChart" x-ref="barChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLES SECTION -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            
+            <!-- Table 1: Most Expensive Hours -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl shadow-card flex flex-col h-[480px]">
+                <div class="p-8 border-b border-gray-100 dark:border-gray-800">
+                    <h2 class="text-xl font-bold text-text-primary dark:text-white flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-red-100 text-accent-red flex items-center justify-center text-lg">🔥</span> 
+                        Najdroższe godziny
+                    </h2>
+                </div>
+                <div class="overflow-y-auto flex-1 custom-scrollbar px-2">
+                    <table class="w-full text-left modern-table">
+                        <thead class="bg-gray-50/50 dark:bg-gray-800/20 text-xs font-semibold text-text-secondary dark:text-text-muted sticky top-0 z-10 backdrop-blur-sm">
+                            <tr>
+                                <th class="px-6 py-4 rounded-tl-xl">Ranga</th>
+                                <th class="px-6 py-4">Godzina</th>
+                                <th class="px-6 py-4">Cena</th>
+                                <th class="px-6 py-4 rounded-tr-xl">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <template x-for="(peak, index) in peakHours" :key="index">
+                                <tr class="group hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                    <td class="px-6 py-5 font-bold text-text-secondary dark:text-gray-400" x-text="'#' + (index + 1)"></td>
+                                    <td class="px-6 py-5 font-medium text-text-primary dark:text-white" x-text="peak.hour"></td>
+                                    <td class="px-6 py-5 font-bold text-text-primary dark:text-white" x-text="peak.price + ' zł'"></td>
+                                    <td class="px-6 py-5">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide"
+                                              :class="{
+                                                'bg-red-100 text-accent-red dark:bg-red-900/30': peak.price > 700,
+                                                'bg-orange-100 text-accent-orange dark:bg-orange-900/30': peak.price <= 700 && peak.price > 500,
+                                                'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': peak.price <= 500
+                                              }">
+                                            <span x-text="peak.status"></span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Table 2: Recent Readings -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-3xl shadow-card flex flex-col h-[480px]">
+                <div class="p-8 border-b border-gray-100 dark:border-gray-800">
+                    <h2 class="text-xl font-bold text-text-primary dark:text-white flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-blue-100 text-accent-blue flex items-center justify-center text-lg">⏱️</span>
+                        Ostatnie pomiary
+                    </h2>
+                </div>
+                <div class="overflow-y-auto flex-1 custom-scrollbar px-2">
+                    <table class="w-full text-left modern-table">
+                        <thead class="bg-gray-50/50 dark:bg-gray-800/20 text-xs font-semibold text-text-secondary dark:text-text-muted sticky top-0 z-10 backdrop-blur-sm">
+                            <tr>
+                                <th class="px-6 py-4 rounded-tl-xl">Czas</th>
+                                <th class="px-6 py-4">Cena (CEN)</th>
+                                <th class="px-6 py-4 rounded-tr-xl">Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <template x-for="(record, index) in historyData" :key="record.dtime">
+                                <tr :class="{'animate-highlight': index === 0, 'group hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors': true}">
+                                    <td class="px-6 py-5 font-medium text-text-primary dark:text-white" x-text="formatTime(record.dtime)"></td>
+                                    <td class="px-6 py-5 font-bold text-text-primary dark:text-white" x-text="formatCurrency(record.cen_cost) + ' zł'"></td>
+                                    <td class="px-6 py-5">
+                                        <!-- Calculate change relative to next item (which is older) -->
+                                        <template x-if="historyData[index+1]">
+                                            <div class="flex items-center gap-2 font-semibold" 
+                                                 :class="record.cen_cost - historyData[index+1].cen_cost > 0 ? 'text-accent-red' : (record.cen_cost - historyData[index+1].cen_cost < 0 ? 'text-accent-green' : 'text-text-muted')">
+                                                <span x-text="record.cen_cost - historyData[index+1].cen_cost > 0 ? '↗' : (record.cen_cost - historyData[index+1].cen_cost < 0 ? '↘' : '—')"></span>
+                                                <span x-text="Math.abs(record.cen_cost - historyData[index+1].cen_cost).toFixed(2)"></span>
+                                            </div>
+                                        </template>
+                                        <template x-if="!historyData[index+1]">
+                                            <span class="text-text-muted">-</span>
+                                        </template>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- DAILY STATS CARDS (SMALL) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Avg -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Średnia Dobowa</h4>
+                <div class="flex items-end gap-2">
+                    <p class="text-2xl font-bold text-text-primary dark:text-white" x-text="formatCurrency(stats.avg)"></p>
+                    <span class="text-sm text-text-secondary mb-1">zł</span>
+                </div>
+                <p class="text-xs text-accent-green mt-2 font-medium bg-green-50 dark:bg-green-900/20 inline-block px-2 py-1 rounded-lg">+5% vs wczoraj</p>
+            </div>
+
+            <!-- Min -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Minimum</h4>
+                <div class="flex items-end gap-2">
+                    <p class="text-2xl font-bold text-text-primary dark:text-white" x-text="formatCurrency(stats.min)"></p>
+                    <span class="text-sm text-text-secondary mb-1">zł</span>
+                </div>
+                <p class="text-xs text-text-secondary mt-2" x-text="'Godzina ' + stats.minTime"></p>
+            </div>
+
+            <!-- Max -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Maksimum</h4>
+                <div class="flex items-end gap-2">
+                    <p class="text-2xl font-bold text-text-primary dark:text-white" x-text="formatCurrency(stats.max)"></p>
+                    <span class="text-sm text-text-secondary mb-1">zł</span>
+                </div>
+                <p class="text-xs text-text-secondary mt-2" x-text="'Godzina ' + stats.maxTime"></p>
+            </div>
+
+            <!-- Volatility -->
+            <div class="bg-bg-card dark:bg-dark-card rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Zmienność</h4>
+                <div class="flex items-end gap-2">
+                    <p class="text-2xl font-bold text-text-primary dark:text-white" x-text="'±' + formatCurrency(stats.stddev)"></p>
+                    <span class="text-sm text-text-secondary mb-1">zł</span>
+                </div>
+                <p class="text-xs font-bold mt-2 inline-block px-2 py-1 rounded-lg" 
+                   :class="stats.stddev > 100 ? 'bg-red-50 text-accent-red dark:bg-red-900/20' : 'bg-green-50 text-accent-green dark:bg-green-900/20'" 
+                   x-text="stats.stddev > 100 ? 'WYSOKA' : 'NISKA'"></p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- APP LOGIC -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('dashboard', () => {
+                // Use private variables for chart instances to avoid Alpine reacting to them
+                let mainChart = null;
+                let barChart = null;
+
+                return {
+                    darkMode: localStorage.getItem('theme') === 'dark',
+                    isLoading: false,
+                    connectionStatus: 'connected', // connected, error
+                    lastUpdate: new Date(),
+                    currentTime: '',
+                    activeAlert: null,
+                    
+                    // Data models
+                    currentData: {
+                        cen_cost: 0,
+                        csdac_pln: 0,
+                        cor_cost: 0,
+                        ceb_pp_cost: 0,
+                        cen_change: 0
+                    },
+                    historyData: [],
+                    stats: {
+                        avg: 0,
+                        min: 0,
+                        max: 0,
+                        minTime: '',
+                        maxTime: '',
+                        stddev: 0
+                    },
+                    peakHours: [],
+                    hourlyAvg: [],
+
+                    init() {
+                        this.startClock();
+                        this.toggleDarkMode(false); // Apply initial theme
+                        this.refreshData(true);
+                        
+                        // Auto-refresh every 30s
+                        setInterval(() => {
+                            this.refreshData();
+                        }, 30000);
+
+                        // Watch theme change to update charts
+                        this.$watch('darkMode', (val) => {
+                            this.updateChartsTheme();
+                        });
+                    },
+
+                    toggleDarkMode(toggle = true) {
+                        if (toggle) {
+                            this.darkMode = !this.darkMode;
+                            localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
+                        }
+                        if (this.darkMode) {
+                            document.documentElement.classList.add('dark');
+                        } else {
+                            document.documentElement.classList.remove('dark');
+                        }
+                    },
+
+                    startClock() {
+                        const update = () => {
+                            const now = new Date();
+                            this.currentTime = now.toLocaleTimeString('pl-PL');
+                        };
+                        update();
+                        setInterval(update, 1000);
+                    },
+
+                    // ------------------------------------------
+                    // DATA GENERATOR & FETCHING (MOCK API)
+                    // ------------------------------------------
+
+                    async refreshData(showLoading = false) {
+                        if (showLoading) this.isLoading = true;
+
+                        try {
+                            await new Promise(r => setTimeout(r, 600));
+
+                            // Mock Data Generation
+                            const now = new Date();
+                            const data = [];
+                            const hours = 24;
+                            
+                            for(let i = 0; i < hours * 2; i++) {
+                                const time = new Date(now.getTime() - (i * 30 * 60000));
+                                const hour = time.getHours();
+                                const isPeak = (hour >= 17 && hour <= 21) || (hour >= 7 && hour <= 10);
+                                const isNight = hour >= 23 || hour <= 5;
+                                
+                                let basePrice = 400;
+                                if (isPeak) basePrice = 600;
+                                if (isNight) basePrice = 280;
+
+                                data.push({
+                                    dtime: time,
+                                    cen_cost: this.randomPrice(basePrice, 100),
+                                    csdac_pln: this.randomPrice(basePrice * 0.9, 50),
+                                    cor_cost: this.randomPrice(basePrice * 0.8, 30),
+                                    ceb_pp_cost: this.randomPrice(basePrice * 0.95, 40)
+                                });
+                            }
+
+                            this.historyData = data;
+                            this.currentData = {
+                                ...data[0],
+                                cen_change: ((data[0].cen_cost - data[1].cen_cost) / data[1].cen_cost) * 100
+                            };
+
+                            this.calculateStats();
+                            this.calculatePeaks();
+                            this.generateHourlyAvg();
+                            this.updateCharts();
+                            this.checkAlerts();
+
+                            this.lastUpdate = new Date();
+                            this.connectionStatus = 'connected';
+                        } catch (e) {
+                            console.error(e);
+                            this.connectionStatus = 'error';
+                        } finally {
+                            this.isLoading = false;
+                        }
+                    },
+
+                    randomPrice(base, variance) {
+                        return Math.max(0, base + (Math.random() * variance * 2 - variance));
+                    },
+
+                    calculateStats() {
+                        const prices = this.historyData.map(d => d.cen_cost);
+                        const sum = prices.reduce((a, b) => a + b, 0);
+                        const avg = sum / prices.length;
+                        
+                        const min = Math.min(...prices);
+                        const max = Math.max(...prices);
+                        
+                        const minRecord = this.historyData.find(d => d.cen_cost === min);
+                        const maxRecord = this.historyData.find(d => d.cen_cost === max);
+
+                        // Std Dev
+                        const squareDiffs = prices.map(value => Math.pow(value - avg, 2));
+                        const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / squareDiffs.length;
+                        const stdDev = Math.sqrt(avgSquareDiff);
+
+                        this.stats = {
+                            avg: avg,
+                            min: min,
+                            max: max,
+                            minTime: minRecord ? this.formatTime(minRecord.dtime) : '-',
+                            maxTime: maxRecord ? this.formatTime(maxRecord.dtime) : '-',
+                            stddev: stdDev
+                        };
+                    },
+
+                    calculatePeaks() {
+                        const sorted = [...this.historyData].sort((a, b) => b.cen_cost - a.cen_cost).slice(0, 5);
+                        this.peakHours = sorted.map(d => {
+                            const price = d.cen_cost;
+                            let status = 'Średnio';
+                            if (price > 700) status = 'Krytyczny';
+                            else if (price > 500) status = 'Wysoki';
+                            else if (price < 300) status = 'Niski';
+
+                            return {
+                                hour: this.formatTime(d.dtime),
+                                price: price.toFixed(2),
+                                status: status
+                            };
+                        });
+                    },
+
+                    generateHourlyAvg() {
+                        const avgs = [];
+                        for(let h=0; h<24; h++) {
+                            let base = 400;
+                            if(h > 17 && h < 21) base = 620;
+                            if(h > 23 || h < 6) base = 250;
+                            avgs.push({ hour: h, val: this.randomPrice(base, 20) });
+                        }
+                        this.hourlyAvg = avgs;
+                    },
+
+                    checkAlerts() {
+                        if (this.currentData.cen_cost > 650) {
+                            this.activeAlert = {
+                                type: 'danger',
+                                message: `Cena energii osiągnęła ${this.currentData.cen_cost.toFixed(0)} zł/MWh. Zalecane ograniczenie zużycia.`
+                            };
+                        } else if (this.currentData.cen_cost < 300) {
+                            this.activeAlert = {
+                                type: 'success',
+                                message: `Niska cena energii (${this.currentData.cen_cost.toFixed(0)} zł/MWh). Optymalny czas na zużycie.`
+                            };
+                        } else {
+                            this.activeAlert = null;
+                        }
+
+                        if (this.activeAlert) {
+                            setTimeout(() => { this.activeAlert = null; }, 10000);
+                        }
+                    },
+
+                    // ------------------------------------------
+                    // CHARTS (LOLLIPOP STYLE)
+                    // ------------------------------------------
+
+                    updateCharts() {
+                        const reversedHistory = [...this.historyData].reverse();
+                        const labels = reversedHistory.map(d => this.formatTime(d.dtime));
+                        this.initMainChart(labels, reversedHistory);
+                        this.initBarChart();
+                    },
+
+                    getChartColors() {
+                        const isDark = this.darkMode;
+                        return {
+                            grid: isDark ? '#334155' : '#F1F5F9',
+                            text: isDark ? '#94A3B8' : '#94A3B8',
+                            primary: '#6366F1'
+                        };
+                    },
+
+                    initMainChart(labels, data) {
+                        if (mainChart) mainChart.destroy();
+                        const ctx = this.$refs.mainChart.getContext('2d');
+                        const colors = this.getChartColors();
+
+                        // "Lollipop" style using Point styling
+                        mainChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: 'Niezbilansowanie (CEN)',
+                                    data: data.map(d => d.cen_cost),
+                                    borderColor: '#6366F1',
+                                    backgroundColor: '#6366F1',
+                                    borderWidth: 2,
+                                    tension: 0.4,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 8,
+                                    pointBackgroundColor: '#6366F1',
+                                    pointBorderColor: this.darkMode ? '#1E293B' : '#FFFFFF',
+                                    pointBorderWidth: 2,
+                                    fill: false
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: {
+                                    mode: 'index',
+                                    intersect: false,
+                                },
+                                plugins: {
+                                    legend: {
+                                        display: true,
+                                        align: 'end',
+                                        labels: { 
+                                            usePointStyle: true,
+                                            color: colors.text,
+                                            font: { family: 'Inter', size: 12 }
+                                        }
+                                    },
+                                    tooltip: {
+                                        backgroundColor: this.darkMode ? '#1E293B' : '#1E293B',
+                                        titleColor: '#fff',
+                                        bodyColor: '#fff',
+                                        padding: 12,
+                                        cornerRadius: 12,
+                                        displayColors: false,
+                                        callbacks: {
+                                            label: function(context) {
+                                                return context.parsed.y.toFixed(2) + ' zł';
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        grid: { display: false },
+                                        ticks: { 
+                                            color: colors.text,
+                                            font: { family: 'Inter' }
+                                        }
+                                    },
+                                    y: {
+                                        grid: { 
+                                            color: colors.grid,
+                                            borderDash: [5, 5]
+                                        },
+                                        ticks: { 
+                                            color: colors.text,
+                                            font: { family: 'Inter' }
+                                        },
+                                        border: { display: false }
+                                    }
+                                }
+                            }
+                        });
+                    },
+
+                    initBarChart() {
+                        if (barChart) barChart.destroy();
+                        const ctx = this.$refs.barChart.getContext('2d');
+                        const colors = this.getChartColors();
+                        
+                        const bgColors = this.hourlyAvg.map(d => {
+                            if (d.val > 600) return '#EF4444'; 
+                            if (d.val < 300) return '#10B981'; 
+                            return '#F59E0B'; 
+                        });
+
+                        barChart = new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: this.hourlyAvg.map(d => d.hour + ':00'),
+                                datasets: [{
+                                    label: 'Średnia',
+                                    data: this.hourlyAvg.map(d => d.val),
+                                    backgroundColor: bgColors,
+                                    borderRadius: 6,
+                                    barPercentage: 0.6
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        backgroundColor: this.darkMode ? '#1E293B' : '#1E293B',
+                                        padding: 12,
+                                        cornerRadius: 12,
+                                        callbacks: {
+                                            label: (ctx) => `Średnia: ${ctx.parsed.y.toFixed(2)} zł`
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        grid: { display: false },
+                                        ticks: { color: colors.text, maxTicksLimit: 8, font: { family: 'Inter' } }
+                                    },
+                                    y: {
+                                        grid: { color: colors.grid, borderDash: [5, 5] },
+                                        ticks: { color: colors.text, font: { family: 'Inter' } },
+                                        border: { display: false }
+                                    }
+                                }
+                            }
+                        });
+                    },
+                    
+                    updateChartsTheme() {
+                        this.updateCharts();
+                    },
+
+                    // ------------------------------------------
+                    // HELPERS & EXPORT
+                    // ------------------------------------------
+
+                    formatCurrency(val) {
+                        if(val === undefined || val === null) return '0.00';
+                        return val.toFixed(2);
+                    },
+
+                    formatTime(dateStr) {
+                        const date = new Date(dateStr);
+                        return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+                    },
+
+                    generateSparklinePath(data, key) {
+                        if (!data || data.length === 0) return '';
+                        const values = data.slice(0, 24).map(d => d[key]).reverse();
+                        const width = 100;
+                        const height = 20;
+                        const min = Math.min(...values);
+                        const max = Math.max(...values);
+                        const range = max - min || 1;
+                        
+                        const points = values.map((val, i) => {
+                            const x = (i / (values.length - 1)) * width;
+                            const y = height - ((val - min) / range) * height;
+                            return `${x},${y}`;
+                        });
+                        
+                        return `M ${points.join(' L ')}`;
+                    },
+                    
+                    exportCSV() {
+                        let csvContent = "data:text/csv;charset=utf-8,";
+                        csvContent += "Data,Godzina,CEN,CSDAC,COR,CEBpp\n";
+                        this.historyData.forEach(row => {
+                            const date = new Date(row.dtime).toLocaleDateString('pl-PL');
+                            const time = new Date(row.dtime).toLocaleTimeString('pl-PL');
+                            csvContent += `${date},${time},${row.cen_cost},${row.csdac_pln},${row.cor_cost},${row.ceb_pp_cost}\n`;
+                        });
+                        const encodedUri = encodeURI(csvContent);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("download", `PSE_ceny_${new Date().toISOString().slice(0,10)}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    },
+                    
+                    exportChart(refName) {
+                        const canvas = document.getElementById(refName);
+                        const image = canvas.toDataURL("image/png");
+                        const link = document.createElement('a');
+                        link.download = `PSE_wykres_${new Date().toISOString().slice(0,10)}.png`;
+                        link.href = image;
+                        link.click();
+                    }
+                };
+            });
+        });
+    </script>
+</body>
+</html>
