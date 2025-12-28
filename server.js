@@ -70,7 +70,11 @@ app.get('/api/current', async (req, res) => {
     );
 
     // Get NEAREST FUTURE CSDAC (forecast for current/next 15min period)
-    // If now is 20:30, show period covering 20:30 or next available
+    // Use JavaScript Date to handle timezone correctly
+    const now = new Date();
+    const oneMinuteAhead = new Date(now.getTime() + 60 * 1000);
+    console.log('[DEBUG] Now:', now.toISOString(), '| Looking for CSDAC >= ', oneMinuteAhead.toISOString());
+
     const csdacResult = await pool.query(
       `SELECT
         dtime,
@@ -78,9 +82,10 @@ app.get('/api/current', async (req, res) => {
         csdac_pln
       FROM pse_energy_prices
       WHERE csdac_pln IS NOT NULL
-        AND dtime >= NOW()
+        AND dtime >= $1
       ORDER BY dtime ASC
-      LIMIT 1`
+      LIMIT 1`,
+      [oneMinuteAhead]
     );
 
     if (completeResult.rows.length === 0 && csdacResult.rows.length === 0) {
@@ -115,12 +120,18 @@ app.get('/api/current', async (req, res) => {
 
     // Get CSDAC - try future first, then fallback to latest
     let csdac = csdacResult.rows[0];
+    console.log('[DEBUG] CSDAC future query result:', {
+      rowCount: csdacResult.rows.length,
+      firstRow: csdacResult.rows[0]
+    });
     if (!csdac) {
+      console.log('[DEBUG] No future CSDAC found, using fallback');
       const fallback = await pool.query(
         `SELECT dtime, period, csdac_pln FROM pse_energy_prices
          WHERE csdac_pln IS NOT NULL ORDER BY dtime DESC LIMIT 1`
       );
       csdac = fallback.rows[0] || {};
+      console.log('[DEBUG] Fallback CSDAC:', csdac);
     }
 
     // Calculate change from previous record

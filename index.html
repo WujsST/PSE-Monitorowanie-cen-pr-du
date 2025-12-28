@@ -119,28 +119,33 @@
         }
 
         /* Custom Tooltip */
+        .has-tooltip {
+            position: relative;
+        }
+
         .tooltip {
             visibility: hidden;
-            position: absolute;
-            z-index: 9999;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 280px;
+            position: fixed;
+            z-index: 99999;
+            width: 320px;
             max-width: 90vw;
-            padding: 16px;
+            padding: 18px;
             background-color: #0F172A;
             color: white;
             text-align: left;
-            border-radius: 12px;
+            border-radius: 14px;
             font-size: 0.875rem;
-            line-height: 1.5;
+            line-height: 1.6;
             opacity: 0;
-            transition: opacity 0.2s;
-            margin-bottom: 10px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            transition: opacity 0.25s ease, visibility 0.25s;
+            box-shadow:
+                0 20px 25px -5px rgba(0, 0, 0, 0.4),
+                0 10px 10px -5px rgba(0, 0, 0, 0.2),
+                0 0 0 2px rgba(255, 255, 255, 0.15);
             font-weight: 400;
             pointer-events: none;
+            white-space: normal;
+            word-wrap: break-word;
         }
 
         .tooltip::after {
@@ -148,10 +153,10 @@
             position: absolute;
             top: 100%;
             left: 50%;
-            margin-left: -6px;
-            border-width: 6px;
+            margin-left: -8px;
+            border-width: 8px;
             border-style: solid;
-            border-color: #1E293B transparent transparent transparent;
+            border-color: #0F172A transparent transparent transparent;
         }
 
         .has-tooltip:hover .tooltip {
@@ -622,7 +627,7 @@
                             class="bg-gray-50/50 dark:bg-gray-800/20 text-xs font-semibold text-text-secondary dark:text-text-muted sticky top-0 z-10 backdrop-blur-sm">
                             <tr>
                                 <th class="px-6 py-4 rounded-tl-xl">Czas</th>
-                                <th class="px-6 py-4">Cena (CEN)</th>
+                                <th class="px-6 py-4">Cena Giełda (CSDAC)</th>
                                 <th class="px-6 py-4 rounded-tr-xl">Trend</th>
                             </tr>
                         </thead>
@@ -633,16 +638,16 @@
                                     <td class="px-6 py-5 font-medium text-text-primary dark:text-white"
                                         x-text="formatTime(record.dtime)"></td>
                                     <td class="px-6 py-5 font-bold text-text-primary dark:text-white"
-                                        x-text="formatCurrency(record.cen_cost) + ' zł'"></td>
+                                        x-text="formatCurrency(record.csdac_pln) + ' zł'"></td>
                                     <td class="px-6 py-5">
                                         <!-- Calculate change relative to next item (which is older) -->
                                         <template x-if="historyData[index+1]">
                                             <div class="flex items-center gap-2 font-semibold"
-                                                :class="record.cen_cost - historyData[index+1].cen_cost > 0 ? 'text-accent-red' : (record.cen_cost - historyData[index+1].cen_cost < 0 ? 'text-accent-green' : 'text-text-muted')">
+                                                :class="record.csdac_pln - historyData[index+1].csdac_pln > 0 ? 'text-accent-red' : (record.csdac_pln - historyData[index+1].csdac_pln < 0 ? 'text-accent-green' : 'text-text-muted')">
                                                 <span
-                                                    x-text="record.cen_cost - historyData[index+1].cen_cost > 0 ? '↗' : (record.cen_cost - historyData[index+1].cen_cost < 0 ? '↘' : '—')"></span>
+                                                    x-text="record.csdac_pln - historyData[index+1].csdac_pln > 0 ? '↗' : (record.csdac_pln - historyData[index+1].csdac_pln < 0 ? '↘' : '—')"></span>
                                                 <span
-                                                    x-text="Math.abs(record.cen_cost - historyData[index+1].cen_cost).toFixed(2)"></span>
+                                                    x-text="Math.abs(record.csdac_pln - historyData[index+1].csdac_pln).toFixed(2)"></span>
                                             </div>
                                         </template>
                                         <template x-if="!historyData[index+1]">
@@ -716,6 +721,49 @@
 
     <!-- APP LOGIC -->
     <script>
+        // Tooltip positioning for fixed tooltips
+        document.addEventListener('DOMContentLoaded', () => {
+            const tooltipHolders = document.querySelectorAll('.has-tooltip');
+
+            tooltipHolders.forEach(holder => {
+                holder.addEventListener('mouseenter', (e) => {
+                    const tooltip = holder.querySelector('.tooltip');
+                    if (!tooltip) return;
+
+                    const rect = holder.getBoundingClientRect();
+                    const tooltipRect = tooltip.getBoundingClientRect();
+
+                    // Position above the element
+                    let top = rect.top - tooltipRect.height - 12;
+                    let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+
+                    // Ensure tooltip stays within viewport
+                    if (left < 10) left = 10;
+                    if (left + tooltipRect.width > window.innerWidth - 10) {
+                        left = window.innerWidth - tooltipRect.width - 10;
+                    }
+
+                    if (top < 10) {
+                        // If not enough space above, position below
+                        top = rect.bottom + 12;
+                    }
+
+                    tooltip.style.top = `${top}px`;
+                    tooltip.style.left = `${left}px`;
+                    tooltip.style.transform = 'none';
+                    tooltip.style.visibility = 'visible';
+                    tooltip.style.opacity = '1';
+                });
+
+                holder.addEventListener('mouseleave', () => {
+                    const tooltip = holder.querySelector('.tooltip');
+                    if (!tooltip) return;
+                    tooltip.style.visibility = 'hidden';
+                    tooltip.style.opacity = '0';
+                });
+            });
+        });
+
         document.addEventListener('alpine:init', () => {
             Alpine.data('dashboard', () => {
                 // Use private variables for chart instances to avoid Alpine reacting to them
@@ -817,19 +865,19 @@
                             // Update data
                             this.currentData = {
                                 ...currentResponse.data,
-                                cen_cost: parseFloat(currentResponse.data.cen_cost),
-                                csdac_pln: parseFloat(currentResponse.data.csdac_pln),
-                                cor_cost: parseFloat(currentResponse.data.cor_cost),
-                                ceb_pp_cost: parseFloat(currentResponse.data.ceb_pp_cost),
+                                cen_cost: parseFloat(currentResponse.data.cen_cost) || 0,
+                                csdac_pln: parseFloat(currentResponse.data.csdac_pln) || 0,
+                                cor_cost: parseFloat(currentResponse.data.cor_cost) || 0,
+                                ceb_pp_cost: parseFloat(currentResponse.data.ceb_pp_cost) || 0,
                                 dtime: new Date(currentResponse.data.dtime)
                             };
 
                             this.historyData = historyResponse.data.map(d => ({
                                 ...d,
-                                cen_cost: parseFloat(d.cen_cost),
-                                csdac_pln: parseFloat(d.csdac_pln),
-                                cor_cost: parseFloat(d.cor_cost),
-                                ceb_pp_cost: parseFloat(d.ceb_pp_cost),
+                                cen_cost: parseFloat(d.cen_cost) || 0,
+                                csdac_pln: parseFloat(d.csdac_pln) || 0,
+                                cor_cost: parseFloat(d.cor_cost) || 0,
+                                ceb_pp_cost: parseFloat(d.ceb_pp_cost) || 0,
                                 dtime: new Date(d.dtime)
                             }));
 
