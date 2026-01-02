@@ -4,8 +4,13 @@
  */
 
 class PSEApiClient {
-    constructor(baseURL = 'http://localhost:3001') {
-        this.baseURL = baseURL;
+    constructor(baseURL) {
+        // Auto-detect environment: use current origin in production, localhost in dev
+        this.baseURL = baseURL || (
+            window.location.hostname === 'localhost'
+                ? 'http://localhost:3001'
+                : window.location.origin
+        );
         this.retryCount = 3;
         this.retryDelay = 1000;
     }
